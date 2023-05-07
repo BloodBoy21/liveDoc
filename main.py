@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from database.db import engine, db
 from services.user_service import UserWithToken, db_user, create_user
 from models.user import UserIn, UserLogin
+from api.init import api_router
 
 app = FastAPI()
+app.include_router(api_router)
 
 
 @app.on_event("startup")

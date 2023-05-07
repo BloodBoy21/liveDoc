@@ -1,4 +1,4 @@
-from models.user import UserIn, UserOut, User, UserLogin
+from models.user import UserIn, UserOut, User, UserLogin, user_helper
 from utils.security import (
     get_password_hash,
     generate_token,
@@ -57,3 +57,15 @@ def db_user(user: UserLogin) -> UserWithToken:
     if not check_password_hash(user.password, db_user.password):
         raise HTTPException(status_code=400, detail="Incorrect password")
     return UserWithToken.from_orm(db_user)
+
+
+def get_user_by_id(user_id: str) -> UserOut:
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user_helper(db_user)
+
+
+def get_users() -> list[UserOut]:
+    all_users = db.query(User).all()
+    return [user_helper(user) for user in all_users]
