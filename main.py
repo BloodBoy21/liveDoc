@@ -1,17 +1,20 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from database.db import engine, db
+from database.mongo import database
 from services.user_service import UserWithToken, db_user, create_user
 from models.user import UserIn, UserLogin
 from api.init import api_router
+from functools import wraps
 
 app = FastAPI()
 app.include_router(api_router)
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     print("Starting up")
     db.metadata.create_all(bind=engine, checkfirst=True)
+    await database.client.start_session()
 
 
 @app.post("/login", response_model=UserWithToken)
