@@ -3,11 +3,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 import os
 from services.user_service import get_user_by_id
+from models.user import UserOut
 
 JWT_SECRET = os.getenv("JWT_SECRET")
 
 
-async def auth_user(auth: str = Depends(HTTPBearer())) -> str:
+async def auth_user(auth: str = Depends(HTTPBearer())) -> UserOut:
     try:
         payload = jwt.decode(auth.credentials, JWT_SECRET, algorithms=["HS256"])
         return get_user_by_id(payload["user_id"])
