@@ -4,7 +4,7 @@ from database.mongo import database
 from services.user_service import UserWithToken, db_user, create_user
 from models.user import UserIn, UserLogin
 from api.init import api_router
-from functools import wraps
+from cache.redis import init_redis
 
 app = FastAPI()
 app.include_router(api_router)
@@ -15,6 +15,7 @@ async def startup():
     print("Starting up")
     db.metadata.create_all(bind=engine, checkfirst=True)
     await database.client.start_session()
+    init_redis()
 
 
 @app.post("/login", response_model=UserWithToken)
