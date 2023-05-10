@@ -4,14 +4,26 @@ from models.mongo.doc import DocIn
 import services.doc_service as DocServices
 from utils.auth import auth_user
 from fastapi import HTTPException
-from middleware.doc_middleware import doc_owner_middleware, doc_shared, can_download
+from middleware.doc_middleware import (
+    doc_owner_middleware,
+    doc_shared,
+    can_download,
+    can_write,
+)
 from utils.middleware_wrapper import create_middleware_wrapper
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
 is_doc_owner = create_middleware_wrapper(callback=doc_owner_middleware)
 is_doc_shared = create_middleware_wrapper(callback=doc_shared)
 can_download = create_middleware_wrapper(callback=can_download)
+can_write = create_middleware_wrapper(callback=can_write)
+
+
+class HistoryRequest(BaseModel):
+    version: int = Field(default=None)
+    content: str = Field(default="")
 
 
 @router.post("/")
@@ -94,3 +106,31 @@ async def download_doc(
     Download a document.
     """
     return await DocServices.download_document(doc_id)
+
+
+@router.post("/{doc_id}/history")
+@can_write
+async def add_editor(
+    user=Depends(auth_user),
+    doc_id: str = None,
+    history: HistoryRequest = None,
+):
+    """
+    Add a user to a document.
+    """
+
+    return DocServices.save_in_cache(doc_id=doc_id, user=user, content=history.content)
+
+
+@router.get("/{doc_id}/history")
+@can_write
+async def get_history(
+    user=Depends(auth_user),
+    doc_id: str = None,
+    history: HistoryRequest = HistoryRequest(),
+):
+    """
+    Add a user to a document.
+    """
+
+    return DocServices.get_from_cache(doc_id=doc_id, user=user, version=history.version)

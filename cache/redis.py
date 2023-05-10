@@ -17,4 +17,7 @@ def init_redis():
 
 
 def get_redis() -> Redis:
+    global cache
+    if not cache:
+        init_redis()
     return cache

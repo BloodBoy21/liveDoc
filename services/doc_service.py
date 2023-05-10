@@ -1,10 +1,16 @@
 from bson import ObjectId
-from models.mongo.doc import DocIn, DOC_COLLECTION, doc_helper, DocModel
+from models.mongo.doc import DocIn, DOC_COLLECTION, doc_helper, DocModel, DocCache
 from models.user import UserOut
 from fastapi import HTTPException
 from docx import Document
 from fastapi.responses import FileResponse
 import os
+from cache.redis import get_redis
+import json
+
+cache = get_redis()
+decode_history = lambda history: json.loads(history.decode("utf-8"))
+encode_history = lambda history: json.dumps(history).encode("utf-8")
 
 
 async def create_document(doc: DocIn, user: UserOut):
@@ -42,7 +48,6 @@ async def add_shared_user(doc: dict, shared_user: str):
     return {"shared_with": updated_doc["shared_with"], "succeed": True}
 
 
-# TODO: return updated doc
 async def add_editor(doc: dict, writer: str):
     if writer in doc["can_edit"]:
         raise HTTPException(status_code=400, detail="User already has write access")
@@ -124,3 +129,55 @@ async def download_document(doc_id) -> FileResponse:
         filename=title,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+def save_in_cache(doc_id: str, user: UserOut, content: str):
+    key = f"{user.user_id}:{doc_id}"
+    if not cache.exists(key):
+        doc = DocCache(content=content, user_id=user.user_id, doc_id=doc_id)
+        cache.set(key, encode_history([doc.dict()]))
+        return {"id": doc_id, "succeed": True}
+    history = cache.get(key)
+    history = decode_history(history)
+    last_doc = DocCache(**history[-1])
+    last_version = int(last_doc.version)
+    history.append(
+        DocCache(
+            content=content,
+            user_id=user.user_id,
+            doc_id=doc_id,
+            version=last_version + 1,
+        ).dict()
+    )
+    cache.set(key, encode_history(history))
+    return {"id": doc_id, "succeed": True}
+
+
+def get_from_cache(doc_id: str, user: UserOut, version: int = None):
+    key = f"{user.user_id}:{doc_id}"
+    if not cache.exists(key):
+        return None
+    history = cache.get(key)
+    history = decode_history(history)
+    if version is None:
+        return DocCache(**history[-1])
+    try:
+        return DocCache(**history[version])
+    except IndexError:
+        return DocCache(**history[-1])
+
+
+def reset_cache(doc_id: str, user: UserOut):
+    key = f"{user.user_id}:{doc_id}"
+    cache.delete(key)
+    return {"id": doc_id, "succeed": True}
+
+
+def reset_from_pivot(doc_id: str, user: UserOut, version: int):
+    key = f"{user.user_id}:{doc_id}"
+    history = cache.get(key)
+    if not history:
+        return {"id": doc_id, "succeed": True}
+    history = decode_history(history)
+    cache.set(key, encode_history(history[:version]))
+    return {"id": doc_id, "succeed": True}

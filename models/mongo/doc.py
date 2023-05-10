@@ -31,3 +31,11 @@ def doc_helper(doc: DocModel) -> dict:
 class DocIn(BaseModel):
     title: str = Field(default="Untitled")
     content: str = Field(default="")
+
+
+class DocCache(BaseModel):
+    content: str = Field(default="")
+    user_id: str = Field()
+    updated_at: str = datetime.now().isoformat()
+    doc_id: str = Field()
+    version: int = Field(default=0)
