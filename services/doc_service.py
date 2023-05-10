@@ -2,6 +2,9 @@ from bson import ObjectId
 from models.mongo.doc import DocIn, DOC_COLLECTION, doc_helper, DocModel
 from models.user import UserOut
 from fastapi import HTTPException
+from docx import Document
+from fastapi.responses import FileResponse
+import os
 
 
 async def create_document(doc: DocIn, user: UserOut):
@@ -103,3 +106,21 @@ async def update_doc_guest(doc, guest: str, options: dict):
         raise HTTPException(status_code=400, detail="Invalid type")
     await operation_functions[operation][type](doc, guest)
     return {"id": doc_id, **options, "succeed": True}
+
+
+async def download_document(doc_id) -> FileResponse:
+    doc = await DOC_COLLECTION.find_one({"_id": ObjectId(doc_id)})
+    doc = doc_helper(doc)
+    data = doc["content"].split("\n")
+    title = doc["title"].replace(" ", "_")
+    title = f"{title}.docx"
+    route = f"{os.getcwd()}/temp/{title}"
+    document = Document()
+    for paragraph in data:
+        document.add_paragraph(paragraph)
+    document.save(route)
+    return FileResponse(
+        route,
+        filename=title,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )

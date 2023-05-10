@@ -4,13 +4,14 @@ from models.mongo.doc import DocIn
 import services.doc_service as DocServices
 from utils.auth import auth_user
 from fastapi import HTTPException
-from middleware.doc_middleware import doc_owner_middleware, doc_shared
+from middleware.doc_middleware import doc_owner_middleware, doc_shared, can_download
 from utils.middleware_wrapper import create_middleware_wrapper
 
 router = APIRouter()
 
 is_doc_owner = create_middleware_wrapper(callback=doc_owner_middleware)
 is_doc_shared = create_middleware_wrapper(callback=doc_shared)
+can_download = create_middleware_wrapper(callback=can_download)
 
 
 @router.post("/")
@@ -81,3 +82,15 @@ def add_editor(
     Add a user to a document.
     """
     return DocServices.add_editor(doc, writer)
+
+
+@router.get("/{doc_id}/download")
+@can_download
+async def download_doc(
+    user=Depends(auth_user),
+    doc_id: str = None,
+):
+    """
+    Download a document.
+    """
+    return await DocServices.download_document(doc_id)
