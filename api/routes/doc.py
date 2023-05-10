@@ -40,9 +40,8 @@ async def delete_doc(user=Depends(auth_user), doc_id: str = None, doc: dict = No
     return await DocServices.delete_document(doc)
 
 
-@router.put("/{doc_id}/edit/{shared_user}")
+@router.put("/{doc_id}/guest/{shared_user}")
 @is_doc_owner
-@is_doc_shared
 async def share_doc(
     user=Depends(auth_user),
     doc_id: str = None,
@@ -53,7 +52,7 @@ async def share_doc(
     """
     Share a document with a user.
     """
-    return await DocServices.update_doc_guest(doc, options)
+    return await DocServices.update_doc_guest(doc, shared_user, options)
 
 
 @router.post("/{doc_id}/viewer/{shared_user}")

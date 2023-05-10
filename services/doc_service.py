@@ -35,17 +35,19 @@ async def add_shared_user(doc: dict, shared_user: str):
     await DOC_COLLECTION.update_one(
         {"_id": ObjectId(doc["id"])}, {"$push": {"shared_with": shared_user}}
     )
-    return {"shared_with": doc["shared_with"], "succeed": True}
+    updated_doc = await DOC_COLLECTION.find_one({"_id": ObjectId(doc["id"])})
+    return {"shared_with": updated_doc["shared_with"], "succeed": True}
 
 
 # TODO: return updated doc
 async def add_editor(doc: dict, writer: str):
     if writer in doc["can_edit"]:
         raise HTTPException(status_code=400, detail="User already has write access")
-    doc_updated = await DOC_COLLECTION.find_one_and_update(
+    await DOC_COLLECTION.update_one(
         {"_id": ObjectId(doc["id"])},
         {"$push": {"shared_with": writer, "can_edit": writer}},
     )
+    doc_updated = await DOC_COLLECTION.find_one({"_id": ObjectId(doc["id"])})
     doc_updated = doc_helper(doc_updated)
     return {
         "shared_with": doc_updated["shared_with"],
@@ -54,7 +56,50 @@ async def add_editor(doc: dict, writer: str):
     }
 
 
-async def update_doc_guest(doc, options: dict):
+async def remove_shared_user(doc: dict, shared_user: str):
+    if shared_user not in doc["shared_with"]:
+        raise HTTPException(status_code=400, detail="User not shared")
+    await DOC_COLLECTION.update_one(
+        {"_id": ObjectId(doc["id"])}, {"$pull": {"shared_with": shared_user}}
+    )
+    updated_doc = await DOC_COLLECTION.find_one({"_id": ObjectId(doc["id"])})
+    return {"shared_with": updated_doc["shared_with"], "succeed": True}
+
+
+async def remove_editor(doc: dict, writer: str):
+    if writer not in doc["can_edit"]:
+        raise HTTPException(status_code=400, detail="User not editor")
+    await DOC_COLLECTION.update_one(
+        {"_id": ObjectId(doc["id"])}, {"$pull": {"can_edit": writer}}
+    )
+    await remove_shared_user(doc, writer)
+    updated_doc = await DOC_COLLECTION.find_one({"_id": ObjectId(doc["id"])})
+    return {"can_edit": updated_doc["can_edit"], "succeed": True}
+
+
+async def update_doc_guest(doc, guest: str, options: dict):
     doc_id = doc["id"]
-    await DOC_COLLECTION.update_one({"_id": ObjectId(doc_id)}, {"$set": options})
+    operation = options.get("operation", None)
+    type = options.get("type", None)
+    if not type:
+        raise HTTPException(status_code=400, detail="Type not specified")
+    add_functions = {
+        "viewer": add_shared_user,
+        "editor": add_editor,
+    }
+    remove_functions = {
+        "viewer": remove_shared_user,
+        "editor": remove_editor,
+    }
+    operation_functions = {
+        "add": add_functions,
+        "remove": remove_functions,
+    }
+    if not operation:
+        raise HTTPException(status_code=400, detail="Operation not specified")
+    if operation not in operation_functions:
+        raise HTTPException(status_code=400, detail="Invalid operation")
+    if type not in operation_functions[operation]:
+        raise HTTPException(status_code=400, detail="Invalid type")
+    await operation_functions[operation][type](doc, guest)
     return {"id": doc_id, **options, "succeed": True}
