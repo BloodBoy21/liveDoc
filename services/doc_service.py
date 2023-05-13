@@ -1,5 +1,12 @@
 from bson import ObjectId
-from models.mongo.doc import DocIn, DOC_COLLECTION, doc_helper, DocModel, DocCache
+from models.mongo.doc import (
+    DocIn,
+    DOC_COLLECTION,
+    doc_helper,
+    DocModel,
+    DocCache,
+    DocUpdate,
+)
 from models.user import UserOut
 from fastapi import HTTPException
 from docx import Document
@@ -7,16 +14,35 @@ from fastapi.responses import FileResponse
 import os
 from cache.redis import get_redis
 import json
+from datetime import datetime
 
 cache = get_redis()
 decode_history = lambda history: json.loads(history.decode("utf-8"))
 encode_history = lambda history: json.dumps(history).encode("utf-8")
+EXP_TIME = 60 * 60 * 2  # 2 hours
 
 
 async def create_document(doc: DocIn, user: UserOut):
     doc_with_user = DocModel(**doc.dict(), user_id=user.user_id)
     new_doc = await DOC_COLLECTION.insert_one(doc_with_user.dict())
     return doc_helper(await DOC_COLLECTION.find_one({"_id": new_doc.inserted_id}))
+
+
+async def update_document(doc_id: str, user: UserOut, doc: DocUpdate):
+    if doc.version:
+        reset_from_pivot(doc_id, user, doc.version)
+    original_doc = await DOC_COLLECTION.find_one({"_id": ObjectId(doc_id)})
+    original_doc = doc_helper(original_doc)
+    doc.content = doc.content or original_doc["content"]
+    doc.title = doc.title or original_doc["title"]
+    update_data = {
+        "updated_at": datetime.now(),
+        **doc.dict(exclude_unset=True),
+    }
+    await DOC_COLLECTION.update_one({"_id": ObjectId(doc_id)}, {"$set": update_data})
+    doc_updated = await DOC_COLLECTION.find_one({"_id": ObjectId(doc_id)})
+    doc_updated = doc_helper(doc_updated)
+    return doc_updated
 
 
 async def get_user_documents(user_id):
@@ -135,7 +161,7 @@ def save_in_cache(doc_id: str, user: UserOut, content: str):
     key = f"{user.user_id}:{doc_id}"
     if not cache.exists(key):
         doc = DocCache(content=content, user_id=user.user_id, doc_id=doc_id)
-        cache.set(key, encode_history([doc.dict()]))
+        cache.set(key, encode_history([doc.dict()]), ex=EXP_TIME)
         return {"id": doc_id, "succeed": True}
     history = cache.get(key)
     history = decode_history(history)
@@ -149,11 +175,11 @@ def save_in_cache(doc_id: str, user: UserOut, content: str):
             version=last_version + 1,
         ).dict()
     )
-    cache.set(key, encode_history(history))
+    cache.set(key, encode_history(history), ex=EXP_TIME)
     return {"id": doc_id, "succeed": True}
 
 
-def get_from_cache(doc_id: str, user: UserOut, version: int = None):
+def get_from_cache(doc_id: str, user: UserOut, version: int):
     key = f"{user.user_id}:{doc_id}"
     if not cache.exists(key):
         return None
@@ -179,5 +205,5 @@ def reset_from_pivot(doc_id: str, user: UserOut, version: int):
     if not history:
         return {"id": doc_id, "succeed": True}
     history = decode_history(history)
-    cache.set(key, encode_history(history[:version]))
+    cache.set(key, encode_history(history[:version]), ex=EXP_TIME)
     return {"id": doc_id, "succeed": True}

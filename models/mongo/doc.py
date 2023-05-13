@@ -39,3 +39,9 @@ class DocCache(BaseModel):
     updated_at: str = datetime.now().isoformat()
     doc_id: str = Field()
     version: int = Field(default=0)
+
+
+class DocUpdate(BaseModel):
+    content: str = Field(default=None)
+    title: str = Field(default=None)
+    version: int = Field(default=None)

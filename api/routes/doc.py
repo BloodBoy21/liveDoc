@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from models.mongo.doc import DocIn
+from models.mongo.doc import DocIn, DocUpdate
 import services.doc_service as DocServices
 from utils.auth import auth_user
 from fastapi import HTTPException
@@ -134,3 +134,15 @@ async def get_history(
     """
 
     return DocServices.get_from_cache(doc_id=doc_id, user=user, version=history.version)
+
+
+@router.patch("/{doc_id}")
+async def update_doc(
+    doc_id: str = "",
+    user=Depends(auth_user),
+    doc: DocUpdate = DocUpdate(),
+):
+    """
+    Update a document.
+    """
+    return await DocServices.update_document(doc_id=doc_id, doc=doc, user=user)
