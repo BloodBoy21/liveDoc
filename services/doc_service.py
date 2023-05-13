@@ -40,6 +40,8 @@ async def update_document(doc_id: str, user: UserOut, doc: DocUpdate):
         **doc.dict(exclude_unset=True),
     }
     await DOC_COLLECTION.update_one({"_id": ObjectId(doc_id)}, {"$set": update_data})
+    if not is_not_in_cache(doc_id=doc_id, user=user, content=doc.content):
+        save_in_cache(doc_id=doc_id, user=user, content=doc.content)
     doc_updated = await DOC_COLLECTION.find_one({"_id": ObjectId(doc_id)})
     doc_updated = doc_helper(doc_updated)
     return doc_updated
@@ -165,15 +167,16 @@ def save_in_cache(doc_id: str, user: UserOut, content: str):
         return {"id": doc_id, "succeed": True}
     history = cache.get(key)
     history = decode_history(history)
-    last_doc = DocCache(**history[-1])
+    last_doc = DocCache(**history[0])
     last_version = int(last_doc.version)
-    history.append(
+    history.insert(
+        0,
         DocCache(
             content=content,
             user_id=user.user_id,
             doc_id=doc_id,
             version=last_version + 1,
-        ).dict()
+        ).dict(),
     )
     cache.set(key, encode_history(history), ex=EXP_TIME)
     return {"id": doc_id, "succeed": True}
@@ -186,11 +189,11 @@ def get_from_cache(doc_id: str, user: UserOut, version: int):
     history = cache.get(key)
     history = decode_history(history)
     if version is None:
-        return DocCache(**history[-1])
+        return DocCache(**history[0])
     try:
         return DocCache(**history[version])
     except IndexError:
-        return DocCache(**history[-1])
+        return DocCache(**history[0])
 
 
 def reset_cache(doc_id: str, user: UserOut):
@@ -207,3 +210,13 @@ def reset_from_pivot(doc_id: str, user: UserOut, version: int):
     history = decode_history(history)
     cache.set(key, encode_history(history[:version]), ex=EXP_TIME)
     return {"id": doc_id, "succeed": True}
+
+
+def is_not_in_cache(content: str, user: UserOut, doc_id: str):
+    key = f"{user.user_id}:{doc_id}"
+    if not cache.exists(key):
+        return False
+    history = cache.get(key)
+    history = decode_history(history)
+    last_doc = DocCache(**history[0])
+    return last_doc.content == content
