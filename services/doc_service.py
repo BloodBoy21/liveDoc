@@ -208,7 +208,7 @@ def reset_from_pivot(doc_id: str, user: UserOut, version: int):
     if not history:
         return {"id": doc_id, "succeed": True}
     history = decode_history(history)
-    cache.set(key, encode_history(history[:version]), ex=EXP_TIME)
+    cache.set(key, encode_history(history[version:]), ex=EXP_TIME)
     return {"id": doc_id, "succeed": True}
 
 
