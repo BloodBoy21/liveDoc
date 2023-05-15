@@ -1,4 +1,5 @@
 from models.user import UserIn, UserOut, User, UserLogin, user_helper
+from models.user_config import UserConfig
 from utils.security import (
     get_password_hash,
     generate_token,
@@ -27,11 +28,31 @@ class UserWithToken(UserOut):
         )
 
 
+class ParseUserConfig:
+    def __init__(self, user_config: UserConfig, user: UserOut):
+        self.user_config = user_config
+        self.user = user
+
+    def add_email(self):
+        if not self.user_config.show_email:
+            self.user.email = ""
+        return self
+
+
 def user_exists(user: UserIn) -> bool:
     db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
+    db_username = db.query(User).filter(User.username == user.username).first()
+    if db_user or db_username:
         return True
     return False
+
+
+def create_user_config(user_id: str):
+    db_user_config = UserConfig(user_id=user_id)
+    db.add(db_user_config)
+    db.commit()
+    db.refresh(db_user_config)
+    return db_user_config
 
 
 def create_user(user: UserIn) -> UserWithToken:
@@ -45,6 +66,9 @@ def create_user(user: UserIn) -> UserWithToken:
     user.password = hashed_password.decode("utf-8")
     db_user = User(**user.dict())
     db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    create_user_config(db_user.user_id)
     db.commit()
     db.refresh(db_user)
     return UserWithToken.from_orm(db_user)
@@ -69,3 +93,11 @@ def get_user_by_id(user_id: str) -> UserOut:
 def get_users() -> list[UserOut]:
     all_users = db.query(User).all()
     return [user_helper(user) for user in all_users]
+
+
+def user_plubic(user: UserOut):
+    user_config = (
+        db.query(UserConfig).filter(UserConfig.user_id == user.user_id).first()
+    ) or UserConfig(user_id=user.user_id)
+    parser = ParseUserConfig(user_config, user)
+    return parser.add_email().user

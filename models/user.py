@@ -1,5 +1,6 @@
 from database.db import db
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 from pydantic import BaseModel
 import uuid
 
@@ -18,6 +19,7 @@ class User(db):
     email = Column(String, unique=True, index=True)
     password = Column(String())
     profile_picture = Column(String, default="")
+    config = relationship("UserConfig", back_populates="user")
 
 
 class UserIn(BaseModel):
