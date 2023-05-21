@@ -6,7 +6,7 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 
 get_password_hash = lambda password: bcrypt.hashpw(
     password.encode("utf-8"), bcrypt.gensalt()
-)
+).decode("utf-8")
 
 
 def check_password_hash(user, db_user):
