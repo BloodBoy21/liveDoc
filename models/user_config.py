@@ -13,3 +13,11 @@ class UserConfig(db):
     user = relationship("User", back_populates="config")
     show_email = Column(Boolean, default=False)
     show_full_name = Column(Boolean, default=False)
+
+
+def user_config_helper(config: UserConfig) -> dict:
+    return {
+        "user_id": config.user_id,
+        "show_email": config.show_email,
+        "show_full_name": config.show_full_name,
+    }
