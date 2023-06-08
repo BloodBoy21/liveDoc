@@ -1,0 +1,33 @@
+version: '3.7'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "3000:80"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URI: postgresql://admin:mypassword@db:5432/livedoc
+      JWT_SECRET: mySecret
+      MONGO_DB: livedoc
+      MONGO_URI: mongodb://mongo:27017/?retryWrites=true&w=majority
+      REDIS_HOST: cache
+  db:
+    image: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: livedoc
+    volumes:
+      - db-data:/var/lib/postgresql/data
+  cache:
+    image: redis
+  mongo:
+    image: mongo
+    volumes:
+      - mongodata:/data/db
+
+volumes:
+  db-data:
+  mongodata:
